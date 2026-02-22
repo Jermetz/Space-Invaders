@@ -179,12 +179,12 @@
         const msg = document.getElementById('msg');
         const statusText = document.getElementById('status-text');
 
-        // Load Custom Images
+        // Load Custom Images with Cache-Buster appended
         const playerImg = new Image();
-        playerImg.src = 'us_ship-removebg-preview.png';
+        playerImg.src = 'us_ship-removebg-preview.png?v=2';
 
         const enemyImg = new Image();
-        enemyImg.src = 'Alien_Ship-removebg-preview.png';
+        enemyImg.src = 'Alien_Ship-removebg-preview.png?v=2';
 
         // High Score
         let highScore = localStorage.getItem('galacticGlory3DHighScore') || 0;
@@ -492,12 +492,15 @@
 
             // Draw Player Ship
             const pShip = project(player.x, player.y, player.z);
-            const playerWidth = 350 * pShip.s;
-            const playerHeight = 350 * pShip.s;
-
+            
             if (playerImg.complete && playerImg.naturalHeight !== 0) {
-                // Adjust Y slightly so the ship sits nicely at the bottom of the screen
-                ctx.drawImage(playerImg, pShip.x - playerWidth / 2, pShip.y - playerHeight / 2 + 50, playerWidth, playerHeight);
+                // Use the image's natural aspect ratio to prevent stretching
+                const shipRatio = playerImg.naturalWidth / playerImg.naturalHeight;
+                const playerHeight = 250 * pShip.s; // Scaled to fit perfectly on screen
+                const playerWidth = playerHeight * shipRatio;
+
+                // Pulled the Y position up so the backend isn't cut off by the canvas bottom
+                ctx.drawImage(playerImg, pShip.x - playerWidth / 2, pShip.y - playerHeight / 2 - 40, playerWidth, playerHeight);
             } else {
                 // Fallback shape if image hasn't loaded
                 ctx.fillStyle = 'blue';
