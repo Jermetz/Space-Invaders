@@ -179,6 +179,13 @@
         const msg = document.getElementById('msg');
         const statusText = document.getElementById('status-text');
 
+        // Load Custom Images
+        const playerImg = new Image();
+        playerImg.src = 'us_ship-removebg-preview.png';
+
+        const enemyImg = new Image();
+        enemyImg.src = 'Alien_Ship-removebg-preview.png';
+
         // High Score
         let highScore = localStorage.getItem('galacticGlory3DHighScore') || 0;
         highScoreEl.innerText = highScore;
@@ -319,7 +326,7 @@
             if (!gameRunning || isWarping) return;
             if (bullets.length < 5) {
                 // Shoot from ship nose into the Z plane
-                bullets.push({ x: player.x, y: player.y, z: player.z, speed: 100 });
+                bullets.push({ x: player.x, y: player.y - 20, z: player.z, speed: 100 });
                 playShootSound();
             }
         }
@@ -345,7 +352,7 @@
             if (isWarping) return;
             enemies.push({
                 x: (Math.random() - 0.5) * 2000,
-                y: player.y - 50, // slightly above player horizon
+                y: player.y - 150, // Horizon level
                 z: 4000, // Spawn far away
                 alive: true
             });
@@ -396,11 +403,10 @@
                 let e = enemies[i];
                 e.z -= baseEnemySpeed;
 
-                // Collision logic (AABB in 3D proxy)
+                // Collision logic
                 let hit = false;
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     let b = bullets[j];
-                    // If bullet z passes enemy z, and X/Y are close
                     if (Math.abs(b.z - e.z) < 150 && Math.abs(b.x - e.x) < 200) {
                         hit = true;
                         bullets.splice(j, 1);
@@ -418,8 +424,7 @@
 
                 // If enemy passes player camera
                 if (e.z < player.z) {
-                    // Check if it hit the player
-                    if (Math.abs(e.x - player.x) < 200) {
+                    if (Math.abs(e.x - player.x) < 250) {
                         lives--;
                         livesEl.innerText = lives;
                         playExplosionSound();
@@ -443,7 +448,6 @@
                 const p = project(s.x, s.y, s.z);
                 
                 if (isWarping) {
-                    // Draw streaking lines for hyperspeed
                     const pTail = project(s.x, s.y, s.z + 500);
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y);
@@ -451,46 +455,34 @@
                     ctx.lineWidth = p.s * 2;
                     ctx.stroke();
                 } else {
-                    // Draw normal dot
                     const size = Math.max(0.5, p.s * 5);
                     ctx.fillRect(p.x, p.y, size, size);
                 }
             });
 
-            // Draw Enemies (3D geometric proxy - a diamond)
-            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-pink');
-            ctx.fillStyle = 'rgba(255, 0, 234, 0.2)';
-            
+            // Draw Enemies
             enemies.sort((a, b) => b.z - a.z); // Draw back to front
             enemies.forEach(e => {
                 const p = project(e.x, e.y, e.z);
-                const size = 150 * p.s; // Base size scaled by depth
-
-                ctx.lineWidth = Math.max(1, p.s * 3);
-                ctx.beginPath();
-                ctx.moveTo(p.x, p.y - size);
-                ctx.lineTo(p.x + size, p.y);
-                ctx.lineTo(p.x, p.y + size);
-                ctx.lineTo(p.x - size, p.y);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
                 
-                // Inner diamond to look 3D
-                ctx.beginPath();
-                ctx.moveTo(p.x, p.y - size*0.5);
-                ctx.lineTo(p.x + size*0.5, p.y);
-                ctx.lineTo(p.x, p.y + size*0.5);
-                ctx.lineTo(p.x - size*0.5, p.y);
-                ctx.closePath();
-                ctx.stroke();
+                // The size scales dynamically based on distance (p.s)
+                const imgWidth = 500 * p.s; 
+                const imgHeight = 250 * p.s;
+
+                if (enemyImg.complete && enemyImg.naturalHeight !== 0) {
+                    ctx.drawImage(enemyImg, p.x - imgWidth / 2, p.y - imgHeight / 2, imgWidth, imgHeight);
+                } else {
+                    // Fallback diamond if image hasn't loaded
+                    ctx.fillStyle = 'purple';
+                    ctx.fillRect(p.x - 20, p.y - 20, 40, 40);
+                }
             });
 
-            // Draw Bullets (Lasers into the distance)
+            // Draw Bullets
             ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-green');
             bullets.forEach(b => {
                 const p1 = project(b.x, b.y, b.z);
-                const p2 = project(b.x, b.y, b.z + 200); // Laser tail length
+                const p2 = project(b.x, b.y, b.z + 200); 
                 ctx.lineWidth = Math.max(1, p1.s * 8);
                 ctx.beginPath();
                 ctx.moveTo(p1.x, p1.y);
@@ -498,34 +490,19 @@
                 ctx.stroke();
             });
 
-            // Draw Player Ship (3D representation)
+            // Draw Player Ship
             const pShip = project(player.x, player.y, player.z);
-            const scale = pShip.s;
-            const shipColor = getComputedStyle(document.documentElement).getPropertyValue('--neon-blue');
-            
-            ctx.strokeStyle = shipColor;
-            ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
-            ctx.lineWidth = 3;
+            const playerWidth = 350 * pShip.s;
+            const playerHeight = 350 * pShip.s;
 
-            // Draw the ship as a perspective polygon (viewed from behind)
-            // Nose, Left Wing, Right Wing, Tail
-            const w = 150 * scale;
-            const h = 80 * scale;
-            
-            ctx.beginPath();
-            ctx.moveTo(pShip.x, pShip.y - h); // Nose
-            ctx.lineTo(pShip.x + w, pShip.y + h); // Right Wing
-            ctx.lineTo(pShip.x, pShip.y + h*0.5); // Tail notch
-            ctx.lineTo(pShip.x - w, pShip.y + h); // Left Wing
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            // Cockpit lines to enhance 3D feel
-            ctx.beginPath();
-            ctx.moveTo(pShip.x, pShip.y - h);
-            ctx.lineTo(pShip.x, pShip.y + h*0.5);
-            ctx.stroke();
+            if (playerImg.complete && playerImg.naturalHeight !== 0) {
+                // Adjust Y slightly so the ship sits nicely at the bottom of the screen
+                ctx.drawImage(playerImg, pShip.x - playerWidth / 2, pShip.y - playerHeight / 2 + 50, playerWidth, playerHeight);
+            } else {
+                // Fallback shape if image hasn't loaded
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(pShip.x - 20, pShip.y - 20, 40, 40);
+            }
         }
 
         function gameOver(txt) {
@@ -550,7 +527,7 @@
             requestAnimationFrame(animate);
         }
 
-        // Initial background draw
+        // Initial render
         initStars();
         draw();
 
