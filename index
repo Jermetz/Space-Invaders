@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Galactic Glory</title>
+    <style>
+        :root {
+            --neon-blue: #00f2ff;
+            --neon-pink: #ff00ea;
+            --neon-green: #39ff14;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            touch-action: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 70vh;
+            max-width: 500px;
+            background: radial-gradient(circle, #111 0%, #000 100%);
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            pointer-events: none;
+            text-shadow: 0 0 5px var(--neon-blue);
+            z-index: 10;
+        }
+
+        #controls {
+            width: 100%;
+            max-width: 500px;
+            height: 25vh;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .touch-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--neon-pink);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .touch-btn:active {
+            background: var(--neon-pink);
+            transform: scale(0.95);
+        }
+
+        #msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border: 1px solid var(--neon-blue);
+            z-index: 20;
+        }
+
+        button#start-btn {
+            padding: 15px 30px;
+            background: var(--neon-blue);
+            border: none;
+            color: black;
+            font-weight: bold;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 style="margin: 10px 0; color: var(--neon-blue); font-size: 1.5rem;">GALACTIC GLORY</h1>
+
+    <div id="game-container">
+        <div id="ui">
+            <span>Score: <span id="score">0</span></span>
+            <span>Lives: <span id="lives">3</span></span>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="msg">
+            <h2 id="status-text">READY?</h2>
+            <button id="start-btn" onclick="resetGame()">START MISSION</button>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div style="display: flex; gap: 15px;">
+            <div class="touch-btn" id="leftBtn">L</div>
+            <div class="touch-btn" id="rightBtn">R</div>
+        </div>
+        <div class="touch-btn" id="fireBtn" style="border-color: var(--neon-blue); width: 90px; height: 90px;">FIRE</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const livesEl = document.getElementById('lives');
+        const msg = document.getElementById('msg');
+        const statusText = document.getElementById('status-text');
+
+        // Audio Engine
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(freq, type, duration, volume = 0.1) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        const playShootSound = () => playSound(440, 'square', 0.1);
+        const playExplosionSound = () => playSound(100, 'sawtooth', 0.3, 0.2);
+        const playGameOverSound = () => {
+            playSound(150, 'sawtooth', 0.5);
+            setTimeout(() => playSound(100, 'sawtooth', 0.8), 200);
+        };
+
+        function resize() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let gameRunning = false;
+        let score = 0;
+        let lives = 3;
+        
+        const player = {
+            width: 40,
+            height: 20,
+            x: 0,
+            y: 0,
+            speed: 5,
+            movingLeft: false,
+            movingRight: false
+        };
+
+        let bullets = [];
+        let enemies = [];
+        let enemyDirection = 1;
+        let enemySpeed = 1;
+
+        function initEnemies() {
+            enemies = [];
+            const rows = 4;
+            const cols = 6;
+            const spacingX = canvas.width / 8;
+            const spacingY = 40;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    enemies.push({
+                        x: c * spacingX + 40,
+                        y: r * spacingY + 50,
+                        width: 25,
+                        height: 18,
+                        alive: true
+                    });
+                }
+            }
+        }
+
+        function resetGame() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            score = 0;
+            lives = 3;
+            scoreEl.innerText = score;
+            livesEl.innerText = lives;
+            player.x = canvas.width / 2 - player.width / 2;
+            player.y = canvas.height - 40;
+            bullets = [];
+            enemySpeed = 1;
+            initEnemies();
+            msg.style.display = 'none';
+            gameRunning = true;
+            animate();
+        }
+
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'Space') fire();
+        });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        const handleBtn = (id, prop) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); player[prop] = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); player[prop] = false; });
+        };
+        handleBtn('leftBtn', 'movingLeft');
+        handleBtn('rightBtn', 'movingRight');
+        
+        document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            fire();
+        });
+
+        function fire() {
+            if (!gameRunning) return;
+            // Limit fire rate
+            if (bullets.length < 3) {
+                bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, speed: 7 });
+                playShootSound();
+            }
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            if ((keys['ArrowLeft'] || player.movingLeft) && player.x > 0) player.x -= player.speed;
+            if ((keys['ArrowRight'] || player.movingRight) && player.x < canvas.width - player.width) player.x += player.speed;
+
+            bullets.forEach((b, i) => {
+                b.y -= b.speed;
+                if (b.y < 0) bullets.splice(i, 1);
+            });
+
+            let hitWall = false;
+            let aliveCount = 0;
+
+            enemies.forEach(e => {
+                if (!e.alive) return;
+                aliveCount++;
+                e.x += enemyDirection * enemySpeed;
+                if (e.x + e.width > canvas.width || e.x < 0) hitWall = true;
+                
+                bullets.forEach((b, bi) => {
+                    if (b.x > e.x && b.x < e.x + e.width && b.y > e.y && b.y < e.y + e.height) {
+                        e.alive = false;
+                        bullets.splice(bi, 1);
+                        score += 10;
+                        scoreEl.innerText = score;
+                        playExplosionSound();
+                    }
+                });
+
+                if (e.y + e.height > player.y) gameOver("SYSTEM BREACHED");
+            });
+
+            if (hitWall) {
+                enemyDirection *= -1;
+                enemies.forEach(e => e.y += 15);
+            }
+
+            if (aliveCount === 0) {
+                enemySpeed += 0.5;
+                initEnemies();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Ship
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-blue');
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.fillRect(player.x + player.width/2 - 5, player.y - 8, 10, 8);
+
+            // Bullets
+            ctx.fillStyle = 'white';
+            bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 12));
+
+            // Enemies
+            enemies.forEach(e => {
+                if (!e.alive) return;
+                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-pink');
+                ctx.fillRect(e.x, e.y, e.width, e.height);
+                // Eyes
+                ctx.fillStyle = 'black';
+                ctx.fillRect(e.x + 4, e.y + 4, 4, 4);
+                ctx.fillRect(e.x + e.width - 8, e.y + 4, 4, 4);
+            });
+        }
+
+        function gameOver(txt) {
+            gameRunning = false;
+            statusText.innerText = txt;
+            msg.style.display = 'block';
+            playGameOverSound();
+        }
+
+        function animate() {
+            if (!gameRunning) return;
+            update();
+            draw();
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
