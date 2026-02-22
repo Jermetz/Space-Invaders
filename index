@@ -21,7 +21,7 @@
             color: white;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
-            touch-action: none; /* Prevents zooming and scrolling on mobile */
+            touch-action: none;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -147,11 +147,9 @@
         const msg = document.getElementById('msg');
         const statusText = document.getElementById('status-text');
 
-        // Load High Score
         let highScore = localStorage.getItem('galacticGloryHighScore') || 0;
         highScoreEl.innerText = highScore;
 
-        // Audio Engine
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
         function playSound(freq, type, duration, volume = 0.1) {
@@ -202,7 +200,6 @@
         let enemySpeed = 1;
         let stars = [];
 
-        // Initialize Starfield
         function initStars() {
             stars = [];
             for (let i = 0; i < 50; i++) {
@@ -251,7 +248,6 @@
             animate();
         }
 
-        // Key Controls
         const keys = {};
         window.addEventListener('keydown', e => {
             keys[e.code] = true;
@@ -259,7 +255,6 @@
         });
         window.addEventListener('keyup', e => keys[e.code] = false);
 
-        // Mobile Controls
         const handleBtn = (id, prop) => {
             const btn = document.getElementById(id);
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); player[prop] = true; });
@@ -284,11 +279,9 @@
         function update() {
             if (!gameRunning) return;
 
-            // Update Player
             if ((keys['ArrowLeft'] || player.movingLeft) && player.x > 0) player.x -= player.speed;
             if ((keys['ArrowRight'] || player.movingRight) && player.x < canvas.width - player.width) player.x += player.speed;
 
-            // Update Stars
             stars.forEach(s => {
                 s.y += s.speed;
                 if (s.y > canvas.height) {
@@ -297,7 +290,6 @@
                 }
             });
 
-            // Update Bullets
             bullets.forEach((b, i) => {
                 b.y -= b.speed;
                 if (b.y < 0) bullets.splice(i, 1);
@@ -306,7 +298,6 @@
             let hitWall = false;
             let aliveCount = 0;
 
-            // Update Enemies
             enemies.forEach(e => {
                 if (!e.alive) return;
                 aliveCount++;
@@ -332,7 +323,7 @@
             }
 
             if (aliveCount === 0) {
-                enemySpeed += 0.5; // Make it harder next wave
+                enemySpeed += 0.5;
                 initEnemies();
             }
         }
@@ -340,7 +331,6 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Stars
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
             stars.forEach(s => {
                 ctx.beginPath();
@@ -348,21 +338,17 @@
                 ctx.fill();
             });
 
-            // Draw Ship
             ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-blue');
             ctx.fillRect(player.x, player.y, player.width, player.height);
             ctx.fillRect(player.x + player.width/2 - 5, player.y - 8, 10, 8);
 
-            // Draw Bullets
             ctx.fillStyle = 'white';
             bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 12));
 
-            // Draw Enemies
             enemies.forEach(e => {
                 if (!e.alive) return;
                 ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-pink');
                 ctx.fillRect(e.x, e.y, e.width, e.height);
-                // Eyes
                 ctx.fillStyle = 'black';
                 ctx.fillRect(e.x + 4, e.y + 4, 4, 4);
                 ctx.fillRect(e.x + e.width - 8, e.y + 4, 4, 4);
@@ -372,7 +358,6 @@
         function gameOver(txt) {
             gameRunning = false;
             
-            // Check High Score
             if (score > highScore) {
                 highScore = score;
                 localStorage.setItem('galacticGloryHighScore', highScore);
@@ -392,8 +377,6 @@
             requestAnimationFrame(animate);
         }
 
-        // --- NEW ADDITION ---
-        // Render the initial state so the canvas isn't blank on load
         player.x = canvas.width / 2 - player.width / 2;
         player.y = canvas.height - 40;
         initStars();
