@@ -20,7 +20,7 @@
             color: white;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
-            touch-action: none;
+            touch-action: none; /* Prevents zooming and scrolling on mobile */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -33,7 +33,7 @@
             width: 100vw;
             height: 70vh;
             max-width: 500px;
-            background: radial-gradient(circle, #111 0%, #000 100%);
+            background: #000;
             border: 2px solid var(--neon-blue);
             box-shadow: 0 0 15px var(--neon-blue);
         }
@@ -51,7 +51,7 @@
             right: 10px;
             display: flex;
             justify-content: space-between;
-            font-size: 18px;
+            font-size: 16px;
             pointer-events: none;
             text-shadow: 0 0 5px var(--neon-blue);
             z-index: 10;
@@ -108,6 +108,7 @@
             font-size: 20px;
             cursor: pointer;
             border-radius: 5px;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -118,6 +119,7 @@
     <div id="game-container">
         <div id="ui">
             <span>Score: <span id="score">0</span></span>
+            <span>HI: <span id="high-score">0</span></span>
             <span>Lives: <span id="lives">3</span></span>
         </div>
         <canvas id="gameCanvas"></canvas>
@@ -139,14 +141,20 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('high-score');
         const livesEl = document.getElementById('lives');
         const msg = document.getElementById('msg');
         const statusText = document.getElementById('status-text');
+
+        // Load High Score
+        let highScore = localStorage.getItem('galacticGloryHighScore') || 0;
+        highScoreEl.innerText = highScore;
 
         // Audio Engine
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
         function playSound(freq, type, duration, volume = 0.1) {
+            if (audioCtx.state === 'suspended') return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = type;
@@ -191,6 +199,20 @@
         let enemies = [];
         let enemyDirection = 1;
         let enemySpeed = 1;
+        let stars = [];
+
+        // Initialize Starfield
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 50; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    speed: Math.random() * 2 + 0.5,
+                    size: Math.random() * 2 + 1
+                });
+            }
+        }
 
         function initEnemies() {
             enemies = [];
@@ -221,12 +243,14 @@
             player.y = canvas.height - 40;
             bullets = [];
             enemySpeed = 1;
+            initStars();
             initEnemies();
             msg.style.display = 'none';
             gameRunning = true;
             animate();
         }
 
+        // Key Controls
         const keys = {};
         window.addEventListener('keydown', e => {
             keys[e.code] = true;
@@ -234,6 +258,7 @@
         });
         window.addEventListener('keyup', e => keys[e.code] = false);
 
+        // Mobile Controls
         const handleBtn = (id, prop) => {
             const btn = document.getElementById(id);
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); player[prop] = true; });
@@ -249,7 +274,6 @@
 
         function fire() {
             if (!gameRunning) return;
-            // Limit fire rate
             if (bullets.length < 3) {
                 bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, speed: 7 });
                 playShootSound();
@@ -259,9 +283,20 @@
         function update() {
             if (!gameRunning) return;
 
+            // Update Player
             if ((keys['ArrowLeft'] || player.movingLeft) && player.x > 0) player.x -= player.speed;
             if ((keys['ArrowRight'] || player.movingRight) && player.x < canvas.width - player.width) player.x += player.speed;
 
+            // Update Stars
+            stars.forEach(s => {
+                s.y += s.speed;
+                if (s.y > canvas.height) {
+                    s.y = 0;
+                    s.x = Math.random() * canvas.width;
+                }
+            });
+
+            // Update Bullets
             bullets.forEach((b, i) => {
                 b.y -= b.speed;
                 if (b.y < 0) bullets.splice(i, 1);
@@ -270,6 +305,7 @@
             let hitWall = false;
             let aliveCount = 0;
 
+            // Update Enemies
             enemies.forEach(e => {
                 if (!e.alive) return;
                 aliveCount++;
@@ -295,7 +331,7 @@
             }
 
             if (aliveCount === 0) {
-                enemySpeed += 0.5;
+                enemySpeed += 0.5; // Make it harder next wave
                 initEnemies();
             }
         }
@@ -303,16 +339,24 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Ship
+            // Draw Stars
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            stars.forEach(s => {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Ship
             ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-blue');
             ctx.fillRect(player.x, player.y, player.width, player.height);
             ctx.fillRect(player.x + player.width/2 - 5, player.y - 8, 10, 8);
 
-            // Bullets
+            // Draw Bullets
             ctx.fillStyle = 'white';
             bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 12));
 
-            // Enemies
+            // Draw Enemies
             enemies.forEach(e => {
                 if (!e.alive) return;
                 ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-pink');
@@ -326,6 +370,15 @@
 
         function gameOver(txt) {
             gameRunning = false;
+            
+            // Check High Score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('galacticGloryHighScore', highScore);
+                highScoreEl.innerText = highScore;
+                txt = "NEW HIGH SCORE!";
+            }
+
             statusText.innerText = txt;
             msg.style.display = 'block';
             playGameOverSound();
